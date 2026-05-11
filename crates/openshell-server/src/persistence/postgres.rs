@@ -440,6 +440,68 @@ WHERE object_type = $1 AND id = $2
         row.map(row_to_draft_chunk_record).transpose()
     }
 
+    pub async fn find_pending_draft_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>> {
+        let dedup_key = draft_chunk_dedup_key_for_status("pending", host, port, binary);
+        let row = sqlx::query(
+            r"
+SELECT id, scope, status, hit_count, payload, created_at_ms, updated_at_ms
+FROM objects
+WHERE object_type = $1 AND scope = $2 AND status = 'pending' AND dedup_key = $3
+",
+        )
+        .bind(DRAFT_CHUNK_OBJECT_TYPE)
+        .bind(sandbox_id)
+        .bind(dedup_key)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| map_db_error(&e))?;
+
+        row.map(row_to_draft_chunk_record).transpose()
+    }
+
+    /// Find any other approved draft chunk for `(sandbox_id, host, port, binary)`
+    /// excluding the chunk identified by `exclude_chunk_id`. Approved chunks
+    /// have `dedup_key=NULL` (issue #1245), so the partial unique index does
+    /// not constrain them — multiple approved chunks can coexist for the same
+    /// key. Callers that intend to mutate a rule contributed to by one chunk
+    /// use this to detect when another decided chunk is also contributing.
+    pub async fn find_other_approved_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+        exclude_chunk_id: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>> {
+        let rows = sqlx::query(
+            r"
+SELECT id, scope, status, hit_count, payload, created_at_ms, updated_at_ms
+FROM objects
+WHERE object_type = $1 AND scope = $2 AND status = 'approved' AND id != $3
+",
+        )
+        .bind(DRAFT_CHUNK_OBJECT_TYPE)
+        .bind(sandbox_id)
+        .bind(exclude_chunk_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| map_db_error(&e))?;
+
+        for row in rows {
+            let record = row_to_draft_chunk_record(row)?;
+            if record.host == host && record.port == port && record.binary == binary {
+                return Ok(Some(record));
+            }
+        }
+        Ok(None)
+    }
+
     pub async fn list_draft_chunks(
         &self,
         sandbox_id: &str,
@@ -492,11 +554,12 @@ ORDER BY created_at_ms DESC
         record.decided_at_ms = decided_at_ms;
         record.last_seen_ms = current_time_ms()?;
         let payload = draft_chunk_payload_from_record(&record)?;
+        let dedup_key = draft_chunk_dedup_key(&record);
 
         let result = sqlx::query(
             r"
 UPDATE objects
-SET status = $3, payload = $4, updated_at_ms = $5
+SET status = $3, payload = $4, updated_at_ms = $5, dedup_key = $6
 WHERE object_type = $1 AND id = $2
 ",
         )
@@ -505,6 +568,7 @@ WHERE object_type = $1 AND id = $2
         .bind(status)
         .bind(payload)
         .bind(record.last_seen_ms)
+        .bind(dedup_key)
         .execute(&self.pool)
         .await
         .map_err(|e| map_db_error(&e))?;
@@ -597,8 +661,20 @@ WHERE object_type = $1 AND scope = $2
     }
 }
 
-fn draft_chunk_dedup_key(chunk: &DraftChunkRecord) -> String {
-    format!("{}|{}|{}", chunk.host, chunk.port, chunk.binary)
+fn draft_chunk_dedup_key(chunk: &DraftChunkRecord) -> Option<String> {
+    draft_chunk_dedup_key_for_status(&chunk.status, &chunk.host, chunk.port, &chunk.binary)
+}
+
+fn draft_chunk_dedup_key_for_status(
+    status: &str,
+    host: &str,
+    port: i32,
+    binary: &str,
+) -> Option<String> {
+    // Only pending chunks participate in dedup. Approved and rejected chunks
+    // get NULL so they don't absorb future submissions for the same
+    // (host, port, binary) — see issue #1245.
+    (status == "pending").then(|| format!("{host}|{port}|{binary}"))
 }
 
 fn row_to_object_record(row: sqlx::postgres::PgRow) -> ObjectRecord {

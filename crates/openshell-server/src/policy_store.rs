@@ -58,6 +58,23 @@ pub trait PolicyStoreExt {
 
     async fn get_draft_chunk(&self, id: &str) -> PersistenceResult<Option<DraftChunkRecord>>;
 
+    async fn find_pending_draft_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>>;
+
+    async fn find_other_approved_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+        exclude_chunk_id: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>>;
+
     async fn list_draft_chunks(
         &self,
         sandbox_id: &str,
@@ -197,6 +214,61 @@ impl PolicyStoreExt for Store {
         match self {
             Self::Postgres(store) => store.get_draft_chunk(id).await,
             Self::Sqlite(store) => store.get_draft_chunk(id).await,
+        }
+    }
+
+    async fn find_pending_draft_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>> {
+        match self {
+            Self::Postgres(store) => {
+                store
+                    .find_pending_draft_chunk_for_key(sandbox_id, host, port, binary)
+                    .await
+            }
+            Self::Sqlite(store) => {
+                store
+                    .find_pending_draft_chunk_for_key(sandbox_id, host, port, binary)
+                    .await
+            }
+        }
+    }
+
+    async fn find_other_approved_chunk_for_key(
+        &self,
+        sandbox_id: &str,
+        host: &str,
+        port: i32,
+        binary: &str,
+        exclude_chunk_id: &str,
+    ) -> PersistenceResult<Option<DraftChunkRecord>> {
+        match self {
+            Self::Postgres(store) => {
+                store
+                    .find_other_approved_chunk_for_key(
+                        sandbox_id,
+                        host,
+                        port,
+                        binary,
+                        exclude_chunk_id,
+                    )
+                    .await
+            }
+            Self::Sqlite(store) => {
+                store
+                    .find_other_approved_chunk_for_key(
+                        sandbox_id,
+                        host,
+                        port,
+                        binary,
+                        exclude_chunk_id,
+                    )
+                    .await
+            }
         }
     }
 

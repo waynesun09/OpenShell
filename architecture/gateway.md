@@ -74,7 +74,7 @@ The storage schema is intentionally narrow:
 | `scope` | Optional owner or namespace for scoped/versioned records, such as a sandbox ID for policy revisions. |
 | `version` | Optional monotonically increasing version for scoped records. |
 | `status` | Optional workflow state for records such as policy revisions or draft policy chunks. |
-| `dedup_key` and `hit_count` | Optional policy-advisor fields for coalescing repeated observations. |
+| `dedup_key` and `hit_count` | Optional policy-advisor fields for coalescing repeated observations. Draft policy chunks only set `dedup_key` while pending; the slot is released when the draft is approved or rejected so a later denial for the same destination can surface as a new pending draft. |
 | `payload` | Prost-encoded protobuf payload for the full domain object. |
 | `created_at_ms` and `updated_at_ms` | Gateway timestamps used for ordering and list output. |
 | `labels` | JSON object carrying Kubernetes-style object labels for filtering and organization. |

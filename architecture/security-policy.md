@@ -72,6 +72,19 @@ recommendations:
 4. A human or admin workflow approves or rejects drafts.
 5. Approved drafts merge into the target sandbox policy.
 
+Drafts dedup on `(sandbox, host, port, binary)` while they are pending so repeat
+denials accumulate hits on a single recommendation. Once a draft is decided
+(approved or rejected) it releases its dedup slot. A fresh denial against the
+same destination — for example, a hostname rule with stale `allowed_ips` after
+DNS resolves to a new backend — therefore surfaces as a new pending draft
+carrying the newly observed details, rather than being silently absorbed by the
+existing decision.
+
+Because decided drafts coexist with pending peers for the same destination, the
+gateway refuses approve, reject, and undo operations that would otherwise
+overwrite or strip a rule another draft contributes to. The error names the
+conflicting peer so the operator can decide it first.
+
 The advisor should propose narrow additions and preserve explicit-deny behavior.
 It is a workflow aid, not an automatic permission grant.
 
