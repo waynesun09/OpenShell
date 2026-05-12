@@ -44,6 +44,8 @@ pods do not need direct external ingress for SSH.
 ## GPU Support
 
 When a sandbox requests GPU support, the driver checks node allocatable capacity
-for `nvidia.com/gpu` and requests one GPU resource in the workload spec. The
-sandbox image must provide the user-space libraries needed by the agent
-workload.
+for `nvidia.com/gpu`. A request with only `gpu=true` asks for one GPU. A request
+with `gpu_count > 0` sets the pod resource limit to that count. The cluster must
+expose `nvidia.com/gpu` through the NVIDIA device plugin or an equivalent
+device-plugin implementation, and the sandbox image must provide the user-space
+libraries needed by the agent workload.

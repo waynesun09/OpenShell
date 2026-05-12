@@ -84,6 +84,7 @@ impl Drop for EnvVarGuard {
 #[derive(Clone, Default)]
 struct SandboxState {
     deleted_names: Arc<Mutex<Vec<Vec<String>>>>,
+    created_requests: Arc<Mutex<Vec<CreateSandboxRequest>>>,
 }
 
 #[derive(Clone, Default)]
@@ -107,7 +108,9 @@ impl OpenShell for TestOpenShell {
         &self,
         request: tonic::Request<CreateSandboxRequest>,
     ) -> Result<Response<SandboxResponse>, Status> {
-        let name = request.into_inner().name;
+        let request = request.into_inner();
+        let name = request.name.clone();
+        self.state.created_requests.lock().await.push(request);
         let sandbox_name = if name.is_empty() {
             "test-sandbox".to_string()
         } else {
@@ -648,6 +651,10 @@ async fn deleted_names(server: &TestServer) -> Vec<Vec<String>> {
     server.openshell.state.deleted_names.lock().await.clone()
 }
 
+async fn created_requests(server: &TestServer) -> Vec<CreateSandboxRequest> {
+    server.openshell.state.created_requests.lock().await.clone()
+}
+
 fn test_tls(server: &TestServer) -> TlsOptions {
     server.tls.with_gateway_name("openshell")
 }
@@ -671,6 +678,7 @@ async fn sandbox_create_keeps_command_sessions_by_default() {
         false,
         None,
         None,
+        None,
         &[],
         None,
         None,
@@ -692,6 +700,47 @@ async fn sandbox_create_keeps_command_sessions_by_default() {
 }
 
 #[tokio::test]
+async fn sandbox_create_gpu_count_sets_gpu_intent_and_count() {
+    let server = run_server().await;
+    let fake_ssh_dir = tempfile::tempdir().unwrap();
+    let xdg_dir = tempfile::tempdir().unwrap();
+    let _env = test_env(&fake_ssh_dir, &xdg_dir);
+    let tls = test_tls(&server);
+    install_fake_ssh(&fake_ssh_dir);
+
+    run::sandbox_create(
+        &server.endpoint,
+        Some("gpu-count"),
+        None,
+        "openshell",
+        None,
+        true,
+        false,
+        Some(2),
+        None,
+        None,
+        &[],
+        None,
+        None,
+        &["echo".to_string(), "OK".to_string()],
+        Some(false),
+        Some(false),
+        &HashMap::new(),
+        &tls,
+    )
+    .await
+    .expect("sandbox create should succeed");
+
+    let requests = created_requests(&server).await;
+    let spec = requests
+        .last()
+        .and_then(|request| request.spec.as_ref())
+        .expect("create request should include a spec");
+    assert!(spec.gpu);
+    assert_eq!(spec.gpu_count, 2);
+}
+
+#[tokio::test]
 async fn sandbox_create_deletes_command_sessions_with_no_keep() {
     let server = run_server().await;
     let fake_ssh_dir = tempfile::tempdir().unwrap();
@@ -708,6 +757,7 @@ async fn sandbox_create_deletes_command_sessions_with_no_keep() {
         None,
         false,
         false,
+        None,
         None,
         None,
         &[],
@@ -752,6 +802,7 @@ async fn sandbox_create_deletes_shell_sessions_with_no_keep() {
         false,
         None,
         None,
+        None,
         &[],
         None,
         None,
@@ -794,6 +845,7 @@ async fn sandbox_create_keeps_sandbox_with_hidden_keep_flag() {
         false,
         None,
         None,
+        None,
         &[],
         None,
         None,
@@ -834,6 +886,7 @@ async fn sandbox_create_keeps_sandbox_with_forwarding() {
         None,
         false,
         false,
+        None,
         None,
         None,
         &[],

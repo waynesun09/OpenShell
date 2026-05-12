@@ -35,6 +35,16 @@ To request GPU resources, add `--gpu`:
 openshell sandbox create --gpu -- claude
 ```
 
+To request multiple GPUs on a Kubernetes-backed gateway, set a GPU count:
+
+```shell
+openshell sandbox create --gpu-count 4 -- claude
+```
+
+GPU counts schedule Kubernetes sandbox pods with an `nvidia.com/gpu` resource
+limit. Use `--gpu-device` only when you need driver-specific device selection;
+it cannot be combined with `--gpu-count`.
+
 For Docker-backed sandboxes, GPU injection uses Docker CDI. If you enable Docker
 CDI after the gateway starts, restart the gateway so OpenShell can detect the
 updated Docker daemon capability.

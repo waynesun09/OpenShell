@@ -1467,6 +1467,7 @@ pub async fn sandbox_create(
     upload: Option<&(String, Option<String>, bool)>,
     keep: bool,
     gpu: bool,
+    gpu_count: Option<u32>,
     gpu_device: Option<&str>,
     editor: Option<Editor>,
     providers: &[String],
@@ -1481,6 +1482,14 @@ pub async fn sandbox_create(
     if editor.is_some() && !command.is_empty() {
         return Err(miette::miette!(
             "--editor cannot be used with a trailing command; use `openshell sandbox connect <name> --editor ...` after the sandbox is ready"
+        ));
+    }
+    if gpu_count == Some(0) {
+        return Err(miette::miette!("--gpu-count must be greater than zero"));
+    }
+    if gpu_count.is_some() && gpu_device.is_some() {
+        return Err(miette::miette!(
+            "--gpu-count cannot be combined with --gpu-device"
         ));
     }
 
@@ -1518,7 +1527,8 @@ pub async fn sandbox_create(
         }
         None => None,
     };
-    let requested_gpu = gpu || image.as_deref().is_some_and(image_requests_gpu);
+    let requested_gpu =
+        gpu || gpu_count.is_some() || image.as_deref().is_some_and(image_requests_gpu);
 
     let inferred_types: Vec<String> = inferred_provider_type(command).into_iter().collect();
     let configured_providers = ensure_required_providers(
@@ -1539,6 +1549,7 @@ pub async fn sandbox_create(
     let request = CreateSandboxRequest {
         spec: Some(SandboxSpec {
             gpu: requested_gpu,
+            gpu_count: gpu_count.unwrap_or_default(),
             gpu_device: gpu_device.unwrap_or_default().to_string(),
             policy,
             providers: configured_providers,

@@ -1132,6 +1132,7 @@ fn driver_sandbox_spec_from_public(spec: &SandboxSpec) -> DriverSandboxSpec {
             .map(driver_sandbox_template_from_public),
         gpu: spec.gpu,
         gpu_device: spec.gpu_device.clone(),
+        gpu_count: spec.gpu_count,
     }
 }
 
@@ -1491,7 +1492,8 @@ fn derive_phase(status: Option<&DriverSandboxStatus>) -> SandboxPhase {
 }
 
 fn rewrite_user_facing_conditions(status: &mut Option<SandboxStatus>, spec: Option<&SandboxSpec>) {
-    let gpu_requested = spec.is_some_and(|sandbox_spec| sandbox_spec.gpu);
+    let gpu_requested =
+        spec.is_some_and(|sandbox_spec| sandbox_spec.gpu || sandbox_spec.gpu_count > 0);
     if !gpu_requested {
         return;
     }
@@ -2006,6 +2008,28 @@ mod tests {
         };
 
         assert!(build_platform_config(&template).is_none());
+    }
+
+    #[test]
+    fn driver_sandbox_spec_from_public_maps_gpu_count() {
+        let public = SandboxSpec {
+            gpu: true,
+            gpu_count: 4,
+            ..Default::default()
+        };
+
+        let driver = driver_sandbox_spec_from_public(&public);
+
+        assert!(driver.gpu);
+        assert_eq!(driver.gpu_count, 4);
+    }
+
+    #[test]
+    fn driver_sandbox_spec_from_public_preserves_default_gpu_count() {
+        let driver = driver_sandbox_spec_from_public(&SandboxSpec::default());
+
+        assert!(!driver.gpu);
+        assert_eq!(driver.gpu_count, 0);
     }
 
     #[test]

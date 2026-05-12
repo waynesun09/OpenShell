@@ -131,6 +131,13 @@ pub(super) fn validate_sandbox_spec(
         validate_sandbox_template(tmpl)?;
     }
 
+    // --- GPU allocation mode ---
+    if spec.gpu_count > 0 && !spec.gpu_device.is_empty() {
+        return Err(Status::invalid_argument(
+            "gpu_count cannot be combined with gpu_device",
+        ));
+    }
+
     // --- spec.policy serialized size ---
     if let Some(ref policy) = spec.policy {
         let size = policy.encoded_len();
@@ -672,6 +679,29 @@ mod tests {
             ..Default::default()
         };
         assert!(validate_sandbox_spec("gpu-sandbox", &spec).is_ok());
+    }
+
+    #[test]
+    fn validate_sandbox_spec_accepts_gpu_count() {
+        let spec = SandboxSpec {
+            gpu_count: 4,
+            ..Default::default()
+        };
+        assert!(validate_sandbox_spec("gpu-count-sandbox", &spec).is_ok());
+    }
+
+    #[test]
+    fn validate_sandbox_spec_rejects_gpu_count_with_gpu_device() {
+        let spec = SandboxSpec {
+            gpu: true,
+            gpu_count: 4,
+            gpu_device: "nvidia.com/gpu=0".to_string(),
+            ..Default::default()
+        };
+        let err = validate_sandbox_spec("gpu-count-sandbox", &spec).unwrap_err();
+        assert_eq!(err.code(), Code::InvalidArgument);
+        assert!(err.message().contains("gpu_count"));
+        assert!(err.message().contains("gpu_device"));
     }
 
     #[test]

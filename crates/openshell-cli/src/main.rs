@@ -1084,6 +1084,13 @@ enum SandboxCommands {
         #[arg(long)]
         gpu: bool,
 
+        /// Request a specific number of GPUs.
+        ///
+        /// This implies --gpu. Kubernetes-backed gateways schedule pods with
+        /// the corresponding nvidia.com/gpu resource limit.
+        #[arg(long, value_name = "COUNT", conflicts_with = "gpu_device", value_parser = clap::value_parser!(u32).range(1..))]
+        gpu_count: Option<u32>,
+
         /// Target a driver-specific GPU device. Docker and Podman use CDI device IDs
         /// (for example "nvidia.com/gpu=0"); VM uses a PCI BDF or index.
         /// Only valid with --gpu. When omitted with --gpu, the driver uses its default GPU selection.
@@ -2364,6 +2371,7 @@ async fn main() -> Result<()> {
                     no_keep,
                     editor,
                     gpu,
+                    gpu_count,
                     gpu_device,
                     providers,
                     policy,
@@ -2430,6 +2438,7 @@ async fn main() -> Result<()> {
                         upload_spec.as_ref(),
                         keep,
                         gpu,
+                        gpu_count,
                         gpu_device.as_deref(),
                         editor,
                         &providers,
@@ -3820,5 +3829,37 @@ mod tests {
             }
             other => panic!("expected service delete command, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn sandbox_create_gpu_count_rejects_zero() {
+        let result = Cli::try_parse_from(["openshell", "sandbox", "create", "--gpu-count", "0"]);
+        assert!(
+            result.is_err(),
+            "sandbox create --gpu-count 0 should be rejected"
+        );
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("--gpu-count"));
+    }
+
+    #[test]
+    fn sandbox_create_gpu_count_conflicts_with_gpu_device() {
+        let result = Cli::try_parse_from([
+            "openshell",
+            "sandbox",
+            "create",
+            "--gpu",
+            "--gpu-count",
+            "2",
+            "--gpu-device",
+            "nvidia.com/gpu=0",
+        ]);
+        assert!(
+            result.is_err(),
+            "sandbox create should reject combining --gpu-count with --gpu-device"
+        );
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("--gpu-count"));
+        assert!(err.contains("--gpu-device"));
     }
 }

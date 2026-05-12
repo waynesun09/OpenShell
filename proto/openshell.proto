@@ -256,6 +256,9 @@ message SandboxSpec {
   // (e.g. "0", "1"). When empty with gpu=true, the driver assigns the
   // first available GPU.
   string gpu_device = 10;
+  // Number of NVIDIA GPUs requested for this sandbox. 0 means unspecified;
+  // when gpu=true and gpu_count=0, drivers keep their existing default.
+  uint32 gpu_count = 11;
 }
 
 // Public sandbox template mapped onto compute-driver template inputs.
