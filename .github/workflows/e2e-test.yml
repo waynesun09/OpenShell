@@ -89,6 +89,10 @@ jobs:
           chown openshell-test: "/run/user/$(id -u openshell-test)"
           chmod 700 "/run/user/$(id -u openshell-test)"
           chown -R openshell-test: .
+          # Root's home is mode 0700, so the rootless user cannot traverse it
+          # to reach mise (/root/.local/bin) or cargo (/root/.cargo/bin) on
+          # PATH. Add the search bit so those binaries are reachable.
+          chmod a+x /root
           for dir in /root/.cargo /root/.rustup /root/.local/bin /root/.local/share/mise /opt/mise; do
             [ -d "$dir" ] && chmod -R a+rX "$dir"
           done
