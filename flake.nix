@@ -35,9 +35,25 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [
+            (import rust-overlay)
+            (import ./nix/overlay.nix)
+          ];
         };
+        lib = pkgs.lib;
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        shellPackages = with pkgs; [
+          rustToolchain
+          # Required to find packages
+          pkg-config
+          # Required for bindgen generation.
+          llvmPackages.libclang
+          # system dependency for openshell-prover
+          z3
+        ];
+        shellEnv = {
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+        };
         generatedCargoNix = crate2nix.tools.${system}.generatedCargoNix {
           name = "openshell";
           src = ./.;
@@ -90,30 +106,48 @@
               cargo = rustToolchain;
             };
         };
+        releaseCrates = lib.mapAttrs' (
+          name: crate: lib.nameValuePair "${name}-release" crate.build
+        ) cargoNix.workspaceMembers;
+        vmRuntimeCompressed = pkgs.callPackage ./nix/vm-runtime.nix {
+          openshellSandbox = releaseCrates."openshell-sandbox-release";
+        };
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
           programs.nixfmt.enable = true;
         };
       in
       {
-        devShells.default = pkgs.mkShell {
-          packages = with pkgs; [
-            rustToolchain
-            # Required to find packages
-            pkg-config
-            # Required for bindgen generation.
-            llvmPackages.libclang
-            # system dependency for openshell-prover
-            z3
-          ];
+        devShells = {
+          default = pkgs.mkShell {
+            packages = shellPackages;
 
-          env = {
-            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            env = shellEnv;
+          };
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          vm = pkgs.mkShell {
+            packages =
+              shellPackages
+              ++ (with pkgs; [
+                e2fsprogs
+                nftables
+                qemu
+                zstd
+              ]);
+
+            env = shellEnv // {
+              OPENSHELL_VM_RUNTIME_COMPRESSED_DIR = "${vmRuntimeCompressed}";
+            };
           };
         };
 
         packages = {
           all = cargoNix.allWorkspaceMembers;
+        }
+        // releaseCrates
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          inherit vmRuntimeCompressed;
         };
 
         formatter = treefmtEval.config.build.wrapper;
