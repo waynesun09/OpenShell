@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Demo "content policy" file.
+#
+# This is a COPY of opencode-policy.yaml with one extra top-level block:
+# `content_policy`. The OpenShell policy engine does not interpret
+# `content_policy` today (it would need code changes); only the redaction proxy
+# in this example reads it. The proxy re-reads this file on EVERY request, so it
+# is a live toggle:
+#
+#   content_type.image: allow   -> images pass through to the public model
+#   content_type.image: redact  -> images are stripped before the public model,
+#                                   and `redact_description` is injected at the
+#                                   redaction site telling the model to recover
+#                                   the data via the local-model MCP tool.
+#
+# Flip the one line below and re-send an image from opencode to see the routing
+# change with no restart.
+
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /app
+    - /etc
+    - /var/log
+  read_write:
+    - /sandbox
+    - /tmp
+    - /dev/null
+    - /home
+    - /root
+    - /dev/pts
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  opencode_runtime:
+    name: opencode_runtime
+    endpoints:
+      - { host: host.openshell.internal, port: 8001 }
+      - { host: registry.npmjs.org, port: 443 }
+      - { host: "*.npmjs.org", port: 443 }
+      - { host: models.dev, port: 443 }
+      - { host: app.opencode.ai, port: 443 }
+    binaries:
+      - { path: "**" }
+
+# --- demo magic: interpreted by the redaction proxy, ignored by OpenShell ---
+content_policy:
+  content_type:
+    image: redact
+    redact_description: Image has been redacted, use a local model through the `local_model` MCP server.
