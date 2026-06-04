@@ -348,4 +348,8 @@ Calling an external service from a proxy to inspect, transform, or block in-flig
 
 ## Open questions
 
-What parts of the design are still TBD?
+- **HTTP scope of v1.** Should the hook target all L7-introspected HTTP egress, only model-bound HTTP egress, or any relay-supported protocol? Current leaning: all L7-introspected HTTP.
+- **Config delivery path.** Deliver the effective middleware configuration by extending the existing sandbox config response (`GetSandboxConfig` / `SandboxPolicy`), or by adding a dedicated bundle RPC in the style of `GetInferenceBundle`? Undecided.
+- **Mandatory capability discovery.** Must `GetCapabilities` succeed before a policy that references a middleware is accepted, or can validation be deferred to the supervisor? Current leaning: strictly mandatory at policy reference.
+- **Two-selector overlap.** A middleware can be attached both through its own `requests:` selector and through a policy's `middleware: [...]` list. Are both surfaces needed, or should one win? This redundancy needs resolving before the policy schema is fixed.
+- **Metadata namespacing.** How are metadata keys namespaced to avoid collisions between middleware? Current leaning: derive the namespace from the middleware name, deferred until a consumer (the model router) exists.

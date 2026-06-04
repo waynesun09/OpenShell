@@ -46,7 +46,7 @@ The main `README.md` should stay relatively high-level. It should explain the pr
 - [done] Implementation plan.
 - [done] Risks.
 - [done] Alternatives.
-- [todo] Open questions.
+- [done] Open questions.
 
 ## Planned Appendices
 
@@ -114,7 +114,7 @@ Still open:
 
 ## Drafting Queue (next)
 
-- Write Open questions section.
+- Open questions section written (HTTP scope, delivery path, mandatory capability discovery, two-selector overlap, metadata namespacing). Remaining mechanics (gzip, chunked uploads) deferred to the failure-and-audit appendix.
 - Fill the pipeline-placement appendix from the real supervisor relay path.
 - Expand the request-response-contract and policy-integration appendices beyond the README sketches.
 - Write the failure-and-audit appendix (OCSF field mappings).
