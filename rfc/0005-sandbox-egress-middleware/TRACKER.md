@@ -44,7 +44,7 @@ The main `README.md` should stay relatively high-level. It should explain the pr
 - [done] Prior art (kept inline in the README, not a separate appendix).
 - [done] Terminology.
 - [done] Implementation plan.
-- [todo] Risks.
+- [done] Risks.
 - [todo] Alternatives.
 - [todo] Open questions.
 
@@ -114,7 +114,7 @@ Still open:
 
 ## Drafting Queue (next)
 
-- Write Risks, Alternatives, Open questions sections.
+- Write Alternatives, Open questions sections.
 - Fill the pipeline-placement appendix from the real supervisor relay path.
 - Expand the request-response-contract and policy-integration appendices beyond the README sketches.
 - Write the failure-and-audit appendix (OCSF field mappings).
@@ -123,6 +123,8 @@ Still open:
 ## Limits, failure modes, and limitations (to cover)
 
 These need a home in the RFC - likely a "Limits and limitations" section plus content in Risks and the failure-and-audit appendix.
+
+Status: the Risks section now covers the high-level framing of limits/timeouts, fail-closed, body buffering, opaque payloads, and the TLS-termination gap. Still to do: gzip/content-encoding handling, chunked/slow-drip uploads, explicit rate-limiting statement, and the detailed mechanics (defaults, `max_body_bytes`, OCSF field mappings) in the failure-and-audit appendix. Decide whether a dedicated "Limits and limitations" section is still warranted or whether Risks + appendix suffice.
 
 - **Limits and timeouts.** Define how request size limits and call timeouts are enforced and by whom. Core tension to capture: rejecting an over-limit request can break sandbox workloads (e.g. inference calls whose context grows each turn until it exceeds the cap), but allowing it through unprocessed means content that should have been redacted egresses anyway. Decide the default and whether it is policy-configurable (ties into the `on_error` / over-cap skip behavior). Reconcile with the proxy's current 256 KiB buffering cap and the capability `max_body_bytes`.
 - **Failure modes / rate limiting.** The middleware service is responsible for its own rate limiting; OpenShell does not rate limit middleware calls. Document this, plus behavior when the middleware is overloaded or unavailable (fail-closed by default).
