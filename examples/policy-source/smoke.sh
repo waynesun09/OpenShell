@@ -26,6 +26,7 @@ else
   GATEWAY_HEALTH_PORT="$((GATEWAY_PORT + 1))"
 fi
 GATEWAY_ENDPOINT="http://127.0.0.1:${GATEWAY_PORT}"
+SANDBOX_NAME="policy-source-smoke-${GATEWAY_PORT}-${RANDOM}"
 SERVER_PID=""
 GATEWAY_PID=""
 CASE_INDEX=0
@@ -135,7 +136,10 @@ detect_driver() {
 }
 
 gateway_check() {
-  "${TARGET_DIR}/policy-source-gateway-check" --endpoint "${GATEWAY_ENDPOINT}" --case "$1"
+  "${TARGET_DIR}/policy-source-gateway-check" \
+    --endpoint "${GATEWAY_ENDPOINT}" \
+    --sandbox-name "${SANDBOX_NAME}" \
+    --case "$1"
 }
 
 create_gateway_config() {

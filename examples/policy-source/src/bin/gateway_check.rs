@@ -19,11 +19,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = OpenShellClient::connect(args.endpoint.clone()).await?;
 
     match args.case.as_str() {
-        "custom-policy-rejected" => custom_policy_rejected(&mut client).await?,
-        "policy-modification-rejected" => policy_modification_rejected(&mut client).await?,
-        "create-base-sandbox" => create_base_sandbox(&mut client).await?,
-        "attach-known-provider" => attach_known_provider(&mut client).await?,
-        "new-provider-rejected" => new_provider_rejected(&mut client).await?,
+        "custom-policy-rejected" => custom_policy_rejected(&mut client, &args.sandbox_name).await?,
+        "policy-modification-rejected" => {
+            policy_modification_rejected(&mut client, &args.sandbox_name).await?
+        }
+        "create-base-sandbox" => create_base_sandbox(&mut client, &args.sandbox_name).await?,
+        "attach-known-provider" => attach_known_provider(&mut client, &args.sandbox_name).await?,
+        "new-provider-rejected" => new_provider_rejected(&mut client, &args.sandbox_name).await?,
         "--help" | "-h" => print_usage(),
         other => return Err(format!("unknown case: {other}").into()),
     }
@@ -33,9 +35,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn custom_policy_rejected(
     client: &mut OpenShellClient<Channel>,
+    sandbox_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = CreateSandboxRequest {
-        name: "policy-source-custom-policy".to_string(),
+        name: format!("{sandbox_name}-custom"),
         spec: Some(SandboxSpec {
             policy: Some(SandboxPolicy::default()),
             ..Default::default()
@@ -50,9 +53,10 @@ async fn custom_policy_rejected(
 
 async fn policy_modification_rejected(
     client: &mut OpenShellClient<Channel>,
+    sandbox_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = UpdateConfigRequest {
-        name: "policy-source-smoke".to_string(),
+        name: sandbox_name.to_string(),
         policy: Some(SandboxPolicy::default()),
         ..Default::default()
     };
@@ -64,9 +68,10 @@ async fn policy_modification_rejected(
 
 async fn create_base_sandbox(
     client: &mut OpenShellClient<Channel>,
+    sandbox_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = CreateSandboxRequest {
-        name: "policy-source-smoke".to_string(),
+        name: sandbox_name.to_string(),
         spec: Some(SandboxSpec::default()),
         labels: HashMap::new(),
     };
@@ -79,9 +84,10 @@ async fn create_base_sandbox(
 
 async fn attach_known_provider(
     client: &mut OpenShellClient<Channel>,
+    sandbox_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = AttachSandboxProviderRequest {
-        sandbox_name: "policy-source-smoke".to_string(),
+        sandbox_name: sandbox_name.to_string(),
         provider_name: "github".to_string(),
         expected_resource_version: 0,
     };
@@ -94,6 +100,7 @@ async fn attach_known_provider(
 
 async fn new_provider_rejected(
     client: &mut OpenShellClient<Channel>,
+    sandbox_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let provider = Provider {
         metadata: Some(ObjectMeta {
@@ -119,7 +126,7 @@ async fn new_provider_rejected(
     )?;
 
     let request = AttachSandboxProviderRequest {
-        sandbox_name: "policy-source-smoke".to_string(),
+        sandbox_name: sandbox_name.to_string(),
         provider_name: "not-from-bundle".to_string(),
         expected_resource_version: 0,
     };
@@ -148,12 +155,14 @@ fn expect_failed_precondition<T>(
 struct Args {
     endpoint: String,
     case: String,
+    sandbox_name: String,
 }
 
 impl Args {
     fn parse() -> Result<Self, String> {
         let mut endpoint = "http://127.0.0.1:17670".to_string();
         let mut case = String::new();
+        let mut sandbox_name = "policy-source-smoke".to_string();
         let mut args = std::env::args().skip(1);
 
         while let Some(arg) = args.next() {
@@ -168,6 +177,11 @@ impl Args {
                         .next()
                         .ok_or_else(|| "--case requires a name".to_string())?;
                 }
+                "--sandbox-name" => {
+                    sandbox_name = args
+                        .next()
+                        .ok_or_else(|| "--sandbox-name requires a name".to_string())?;
+                }
                 "--help" | "-h" => {
                     print_usage();
                     std::process::exit(0);
@@ -179,13 +193,17 @@ impl Args {
             return Err("--case is required".to_string());
         }
 
-        Ok(Self { endpoint, case })
+        Ok(Self {
+            endpoint,
+            case,
+            sandbox_name,
+        })
     }
 }
 
 fn print_usage() {
     eprintln!(
-        "usage: policy-source-gateway-check --endpoint URL --case CASE\n\n\
+        "usage: policy-source-gateway-check --endpoint URL --case CASE [--sandbox-name NAME]\n\n\
          cases: custom-policy-rejected, policy-modification-rejected, \
          create-base-sandbox, attach-known-provider, new-provider-rejected"
     );
