@@ -76,6 +76,8 @@ management, or naming conventions.
   safety validation, or driver schema validation.
 - Moving sandbox runtime enforcement out of the sandbox supervisor and proxy.
 - Replacing the gateway database as the system of record.
+- Adding new first-class gateway resource kinds for quotas, name policies,
+  policy bundles, or driver config policy.
 
 ## Proposal
 
@@ -125,7 +127,7 @@ This lets OpenShell add deployment-specific business logic around the resource
 operations it already supports while keeping runtime reads local and
 deterministic.
 
-### Gateway state
+### Source of truth and reconciliation
 
 External systems should not participate in live gateway lookup paths. Instead,
 they run controllers or sync jobs that write desired state through existing
@@ -170,12 +172,6 @@ Ownership and provenance should use existing metadata surfaces where available,
 such as labels on objects and config fields on provider records. The gateway DB
 record is still authoritative; provenance explains how the current desired
 state arrived.
-
-This RFC does not introduce new gateway resource kinds for quotas, name
-policies, policy bundles, or driver config policy. Those concerns can be
-enforced by interceptor services and normal gateway configuration. If
-OpenShell later needs first-class resources for them, that should be a separate
-RFC.
 
 ### Operation phases
 
