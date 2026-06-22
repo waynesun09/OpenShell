@@ -182,9 +182,21 @@ role = "openshell-gateway"
 service_account_token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 ```
 
+For a local single-player macOS gateway:
+
+```toml
+[openshell.gateway]
+credential_drivers = ["macos-keychain"]
+
+[openshell.credential_drivers.macos-keychain]
+service = "com.nvidia.openshell.provider-credentials"
+```
+
 For `kubernetes-secrets`, `namespace` sets where OpenShell-managed provider Secret objects are stored. When omitted, the driver uses the in-cluster ServiceAccount namespace when available, otherwise `default`.
 
 For `openbao`, `address` points at the OpenBao service, `mount` and `kv_version` describe the KV engine where OpenShell-managed provider secrets are stored, and `auth_method = "kubernetes"` logs in with the gateway Pod's ServiceAccount token. For local or development validation, use `auth_method = "token_file"` with `token_path = "/path/to/token"`. Do not put literal OpenBao tokens in TOML.
+
+For `macos-keychain`, OpenShell stores provider credentials as generic password items in the default macOS Keychain. `service` namespaces those items and defaults to `com.nvidia.openshell.provider-credentials`. `keychain_path` is optional and must be absolute; use it only for an explicitly managed alternate keychain, such as local validation with a temporary keychain.
 
 For remote credential drivers, set `transport = "uds"` with `socket_path`. Omit `command`, `args`, and `startup_timeout_secs` when another service manager prestarts the driver socket. Keep backend tokens out of TOML; point the driver at mounted token files or native identity mechanisms instead.
 

@@ -3530,6 +3530,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "openshell-driver-macos-keychain"
+version = "0.0.0"
+dependencies = [
+ "openshell-core",
+ "security-framework",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tonic",
+]
+
+[[package]]
 name = "openshell-driver-openbao"
 version = "0.0.0"
 dependencies = [
@@ -3728,6 +3742,7 @@ dependencies = [
  "openshell-driver-docker",
  "openshell-driver-kubernetes",
  "openshell-driver-kubernetes-secrets",
+ "openshell-driver-macos-keychain",
  "openshell-driver-openbao",
  "openshell-driver-podman",
  "openshell-ocsf",

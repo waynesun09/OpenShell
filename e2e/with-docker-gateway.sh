@@ -18,6 +18,14 @@
 #   OPENSHELL_E2E_DOCKER_SANDBOX_IMAGE=...
 #   OPENSHELL_E2E_DOCKER_SANDBOX_IMAGE_PULL_POLICY=Always|IfNotPresent|Never
 #
+# Credential driver overrides:
+#   OPENSHELL_E2E_MACOS_KEYCHAIN_CREDENTIAL_DRIVER=1
+#       On macOS, create a temporary Keychain and configure the gateway to use
+#       the in-tree macos-keychain credential storage driver.
+#   OPENSHELL_E2E_MACOS_KEYCHAIN_USE_LOGIN=1
+#       With the macos-keychain e2e enabled, use the normal default/login
+#       Keychain instead of an isolated temporary Keychain.
+#
 # The default community sandbox image uses :latest. This wrapper refreshes it
 # before starting the gateway, while the Docker driver defaults to IfNotPresent
 # so local Dockerfile-built images remain usable.
@@ -112,6 +120,11 @@ DOCKER_NETWORK_CONNECTED_CONTAINER=""
 DOCKER_NETWORK_MANAGED=0
 GPU_MODE="${OPENSHELL_E2E_DOCKER_GPU:-0}"
 DOCKER_SUPERVISOR_ARGS=()
+MACOS_KEYCHAIN_CREDENTIAL_DRIVER="${OPENSHELL_E2E_MACOS_KEYCHAIN_CREDENTIAL_DRIVER:-0}"
+MACOS_KEYCHAIN_USE_LOGIN="${OPENSHELL_E2E_MACOS_KEYCHAIN_USE_LOGIN:-0}"
+MACOS_KEYCHAIN_PATH=""
+MACOS_KEYCHAIN_PASSWORD="${OPENSHELL_E2E_MACOS_KEYCHAIN_PASSWORD:-openshell-e2e}"
+MACOS_KEYCHAIN_SERVICE="${OPENSHELL_E2E_MACOS_KEYCHAIN_SERVICE:-com.nvidia.openshell.e2e.provider-credentials}"
 
 # Isolate CLI/SDK gateway metadata from the developer's real config.
 export XDG_CONFIG_HOME="${WORKDIR}/config"
@@ -173,6 +186,10 @@ cleanup() {
   fi
 
   e2e_print_gateway_log_on_failure "${exit_code}" "${GATEWAY_LOG}"
+
+  if [ -n "${MACOS_KEYCHAIN_PATH}" ] && command -v security >/dev/null 2>&1; then
+    security delete-keychain "${MACOS_KEYCHAIN_PATH}" >/dev/null 2>&1 || true
+  fi
 
   rm -rf "${WORKDIR}" 2>/dev/null || true
 }
@@ -505,10 +522,42 @@ toml_string() {
   printf '"%s"' "${value}"
 }
 
+configure_macos_keychain_credential_driver() {
+  if [ "${MACOS_KEYCHAIN_CREDENTIAL_DRIVER}" != "1" ]; then
+    return 0
+  fi
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo "ERROR: macos-keychain credential-driver e2e requires macOS." >&2
+    exit 2
+  fi
+  if ! command -v security >/dev/null 2>&1; then
+    echo "ERROR: macos-keychain credential-driver e2e requires the macOS security CLI." >&2
+    exit 2
+  fi
+
+  export OPENSHELL_E2E_MACOS_KEYCHAIN_SERVICE="${MACOS_KEYCHAIN_SERVICE}"
+  if [ "${MACOS_KEYCHAIN_USE_LOGIN}" = "1" ]; then
+    unset OPENSHELL_E2E_MACOS_KEYCHAIN_PATH
+    return 0
+  fi
+
+  MACOS_KEYCHAIN_PATH="${WORKDIR}/openshell-e2e.keychain-db"
+  security create-keychain -p "${MACOS_KEYCHAIN_PASSWORD}" "${MACOS_KEYCHAIN_PATH}"
+  security unlock-keychain -p "${MACOS_KEYCHAIN_PASSWORD}" "${MACOS_KEYCHAIN_PATH}"
+  security set-keychain-settings -lut 7200 "${MACOS_KEYCHAIN_PATH}" >/dev/null
+
+  export OPENSHELL_E2E_MACOS_KEYCHAIN_PATH="${MACOS_KEYCHAIN_PATH}"
+}
+
+configure_macos_keychain_credential_driver
+
 GATEWAY_CONFIG="${STATE_DIR}/gateway.toml"
 {
   printf '[openshell]\nversion = 1\n\n'
   printf '[openshell.gateway]\nlog_level = "info"\n\n'
+  if [ "${MACOS_KEYCHAIN_CREDENTIAL_DRIVER}" = "1" ]; then
+    printf 'credential_drivers = ["macos-keychain"]\n'
+  fi
   e2e_write_gateway_jwt_config "${JWT_DIR}" "openshell-e2e-docker-${HOST_PORT}"
   e2e_write_gateway_mtls_auth_config
   printf '[openshell.drivers.docker]\n'
@@ -536,6 +585,13 @@ GATEWAY_CONFIG="${STATE_DIR}/gateway.toml"
   done
   if [ -n "${GATEWAY_HOST_ALIAS_IP}" ]; then
     printf 'host_gateway_ip = %s\n'    "$(toml_string "${GATEWAY_HOST_ALIAS_IP}")"
+  fi
+  if [ "${MACOS_KEYCHAIN_CREDENTIAL_DRIVER}" = "1" ]; then
+    printf '\n[openshell.credential_drivers.macos-keychain]\n'
+    printf 'service = %s\n'       "$(toml_string "${MACOS_KEYCHAIN_SERVICE}")"
+    if [ -n "${MACOS_KEYCHAIN_PATH}" ]; then
+      printf 'keychain_path = %s\n' "$(toml_string "${MACOS_KEYCHAIN_PATH}")"
+    fi
   fi
 } > "${GATEWAY_CONFIG}"
 

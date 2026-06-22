@@ -382,7 +382,9 @@ openshell provider create \
 When a gateway enables one credential driver, the create/update API stores
 submitted provider credentials in that backend and persists only internal
 credential handles. When no credential driver is enabled, OpenShell stores
-provider credentials in the gateway database.
+provider credentials in the gateway database. Kubernetes gateways can use
+`kubernetes-secrets` or `openbao`; local single-player macOS gateways can use
+`macos-keychain`.
 
 Provider profiles whose required credentials are fully runtime-resolvable through `token_grant` or gateway-managed refresh can be created without `--credential`.
 

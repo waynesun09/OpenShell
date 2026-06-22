@@ -271,13 +271,23 @@ async fn update_provider_record_validating(
 
     // Apply merge to create candidate
     let mut candidate = existing.clone();
+    let existing_handles = existing.credential_handles.clone();
     let removed_credential_handles = credential_handles_removed_by_update(&existing, &provider);
+    let replaced_credential_handle_keys = provider
+        .credentials
+        .iter()
+        .filter(|(_, value)| !value.is_empty())
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
     candidate.credentials = merge_map(candidate.credentials, provider.credentials);
     candidate.config = merge_map(candidate.config, provider.config);
     candidate.credential_expires_at_ms = merge_i64_map(
         candidate.credential_expires_at_ms,
         provider.credential_expires_at_ms,
     );
+    for key in replaced_credential_handle_keys {
+        candidate.credential_handles.remove(&key);
+    }
 
     // Validate BEFORE writing to prevent persisting invalid state.
     // Validate only the mutable fields (credentials/config) plus metadata and
@@ -296,7 +306,6 @@ async fn update_provider_record_validating(
     for key in removed_credential_handles.keys() {
         candidate.credential_handles.remove(key);
     }
-    let existing_handles = candidate.credential_handles.clone();
     store_provider_credentials_if_configured(credentials, &mut candidate, &existing_handles)
         .await?;
     validate_provider_mutable_fields(&candidate)?;
@@ -4148,6 +4157,71 @@ mod tests {
                 .map(|handle| handle.driver.as_str()),
             Some("test-static")
         );
+    }
+
+    #[tokio::test]
+    async fn update_provider_record_overwrites_credentials_with_runtime() {
+        let store = test_store().await;
+        let config = openshell_core::Config::new(None).with_credential_drivers(["test-static"]);
+        let credentials = crate::credentials::CredentialRuntime::from_config(&config).unwrap();
+
+        create_provider_record_validating(
+            &store,
+            provider_with_credential_value("openai-local", "openai", "OPENAI_API_KEY", "sk-first"),
+            Some(&credentials),
+        )
+        .await
+        .unwrap();
+        let stored_first: Provider = store
+            .get_message_by_name("openai-local")
+            .await
+            .unwrap()
+            .unwrap();
+        let first_handle = stored_first
+            .credential_handles
+            .get("OPENAI_API_KEY")
+            .expect("stored handle")
+            .handle
+            .clone();
+
+        let updated = update_provider_record_validating(
+            &store,
+            provider_with_credential_value("openai-local", "openai", "OPENAI_API_KEY", "sk-second"),
+            Some(&credentials),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            updated
+                .credentials
+                .get("OPENAI_API_KEY")
+                .map(String::as_str),
+            Some("REDACTED")
+        );
+        assert!(updated.credential_handles.is_empty());
+
+        let stored_second: Provider = store
+            .get_message_by_name("openai-local")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(stored_second.credentials.is_empty());
+        assert_eq!(
+            stored_second
+                .credential_handles
+                .get("OPENAI_API_KEY")
+                .map(|handle| handle.handle.as_str()),
+            Some(first_handle.as_str())
+        );
+
+        let result = resolve_provider_environment_with_credentials(
+            &store,
+            &["openai-local".to_string()],
+            &credentials,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.get("OPENAI_API_KEY"), Some(&"sk-second".to_string()));
     }
 
     #[tokio::test]

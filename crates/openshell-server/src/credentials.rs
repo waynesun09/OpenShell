@@ -31,6 +31,7 @@ use openshell_core::proto::credentials::v1::{
 use openshell_core::proto::{CredentialHandle, Provider};
 use openshell_core::{Config, Error, Result as CoreResult};
 use openshell_driver_kubernetes_secrets::KubernetesSecretsCredentialDriver;
+use openshell_driver_macos_keychain::MacosKeychainCredentialDriver;
 use openshell_driver_openbao::OpenBaoCredentialDriver;
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -649,6 +650,11 @@ async fn build_in_tree_driver(
             Arc::new(OpenBaoCredentialDriver::from_config(backend_config)?);
         return Ok(Some(driver));
     }
+    if name == MacosKeychainCredentialDriver::NAME {
+        let driver: Arc<dyn CredentialDriver> =
+            Arc::new(MacosKeychainCredentialDriver::from_config(backend_config)?);
+        return Ok(Some(driver));
+    }
     Ok(None)
 }
 
@@ -685,6 +691,27 @@ impl CredentialDriver for KubernetesSecretsCredentialDriver {
 
 #[async_trait]
 impl CredentialDriver for OpenBaoCredentialDriver {
+    async fn store_credential(
+        &self,
+        request: StoreCredentialRequest,
+    ) -> Result<CredentialHandle, Status> {
+        Self::store_credential(self, request).await
+    }
+
+    async fn delete_credential(&self, request: DeleteCredentialRequest) -> Result<(), Status> {
+        Self::delete_credential(self, request).await
+    }
+
+    async fn resolve_credentials(
+        &self,
+        requests: Vec<ResolveCredentialRequest>,
+    ) -> Result<Vec<ResolvedCredential>, Status> {
+        Self::resolve_credentials(self, requests).await
+    }
+}
+
+#[async_trait]
+impl CredentialDriver for MacosKeychainCredentialDriver {
     async fn store_credential(
         &self,
         request: StoreCredentialRequest,
@@ -1343,6 +1370,24 @@ token_path = "{}"
 "#,
             token_file.path().display()
         ));
+        let runtime = CredentialRuntime::from_config_file(&config, Some(&file))
+            .await
+            .unwrap();
+
+        assert!(runtime.stores_provider_credentials());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn runtime_uses_configured_macos_keychain_in_tree_driver_table() {
+        let config = Config::new(None).with_credential_drivers(["macos-keychain"]);
+        let file = config_file(
+            r#"
+[openshell.credential_drivers.macos-keychain]
+transport = "in_tree"
+service = "com.nvidia.openshell.test.provider-credentials"
+"#,
+        );
         let runtime = CredentialRuntime::from_config_file(&config, Some(&file))
             .await
             .unwrap();
