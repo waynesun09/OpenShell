@@ -55,7 +55,7 @@ This RFC uses the following terms with specific meanings.
 - **Evaluation.** One invocation of middleware for a specific operation, request context, bounded body, and middleware config. Middleware keeps operation-specific methods such as `EvaluateHttpRequest` because inputs and outputs differ by protocol or operation type.
 - **Result.** The response to an evaluation. For the v1 HTTP request hook, the result carries an allow/deny decision, optional replacement content and safe header mutations, findings, metadata, and safe error information.
 - **Middleware config.** A named policy entry that binds a middleware implementation (`middleware`) to service-specific configuration. The entry name is the reusable policy reference; the `middleware` value identifies the registered or built-in implementation that validates and runs the config.
-- **Manifest.** The self-description a middleware returns from `Describe`: its identity and version, the contract version it implements, and the operations and phases it supports. OpenShell validates that a registered middleware's manifest supports every config that binds to it.
+- **Manifest.** The self-description a middleware returns from `Describe`: its identity, service version, API version, and service-owned bindings for the hooks it supports. OpenShell validates that a registered middleware's manifest supports every config that binds to it.
 - **Decision.** The allow-or-deny outcome a middleware returns for a request. `allow` lets the request proceed (possibly transformed); `deny` short-circuits it. This vocabulary matches the rest of the OpenShell policy system.
 - **Failure policy.** The configured `on_error` behavior when middleware cannot return a valid result: `fail_closed` denies the request, while `fail_open` lets it continue without that middleware's transformation while recording an enforcement failure. `fail_closed` is the default whenever processing is required.
 - **Transformation.** A middleware returning replacement content, and any allowed header mutations, that the supervisor forwards in place of the original request. A later middleware in a chain sees the previous stage's transformed content.
@@ -146,7 +146,7 @@ The contract has two parts: a configuration-time handshake and a request-time ev
 
 Configuration-time:
 
-- `Describe` reports the service identity and version, the contract version it implements, and the operation types and phases it supports.
+- `Describe` reports the service identity, service version, API version, and service-owned bindings for the hook operation and phase pairs it supports.
 - `ValidateConfig` lets the service validate its own service-specific configuration fragment.
 
 Request-time:
@@ -169,15 +169,14 @@ service SupervisorMiddleware {
 message MiddlewareManifest {
   string api_version = 1;
   string name = 2;
-  string version = 3;                   // service implementation version
-  string contract_version = 4;          // middleware contract major version, e.g. "v1"
-  repeated Operation operations = 5;    // e.g. method "HttpRequest", phase "pre_credentials"
-  repeated string metadata_namespaces = 6;
+  string service_version = 3;           // service implementation version, informational
+  repeated MiddlewareBinding bindings = 4;
 }
 
-message Operation {
-  string method = 1;                    // e.g. "HttpRequest"
-  string phase = 2;                     // e.g. "pre_credentials"
+message MiddlewareBinding {
+  string id = 1;                        // service-owned stable ID
+  string operation = 2;                 // e.g. "HttpRequest"
+  string phase = 3;                     // e.g. "pre_credentials"
 }
 
 // Context plus body as two top-level fields, so the body is cleanly separable.
@@ -241,8 +240,8 @@ The `actor` process is the same identity OpenShell already resolves on the egres
 Shared mechanics:
 
 - **Endpoint exposure and auth.** Both extension systems use gRPC network endpoints, mTLS, bearer invocation tokens, and an explicit insecure research-preview mode when plaintext local development is allowed. Endpoint declaration, identity binding, credential material, and rotation should use the same underlying mechanics.
-- **Manifest description.** Both extension systems use `Describe` to return a manifest that declares service identity, implementation version, supported contract version, supported operations, and relevant metadata.
-- **Operation phases.** Both systems hook into a `(method, phase)` pair. The phase sets differ by system, but the concept is the same: `method=CreateSandbox, phase=pre_request` for a gateway interceptor, and `method=HttpRequest, phase=pre_credentials` for v1 supervisor middleware.
+- **Manifest description.** Both extension systems use `Describe` to return a manifest that declares service identity, implementation version, supported API version, and service-owned bindings for supported hook points.
+- **Operation phases.** Both systems hook into a named operation plus phase. The phase sets differ by system, but the concept is the same: `method=CreateSandbox, phase=pre_request` for a gateway interceptor, and `operation=HttpRequest, phase=pre_credentials` for v1 supervisor middleware.
 - **Evaluation and result.** Both systems run an evaluate-style request and return a result. Middleware keeps operation-specific methods such as `EvaluateHttpRequest` because inputs and outputs differ by protocol or operation type; interceptor methods and messages are defined by RFC 0010.
 - **Failure policy.** Both systems use `on_error: fail_closed|fail_open`, with fail-closed as the safe default for required enforcement.
 - **Observability.** Both systems emit OCSF events with the details relevant to the extension point, while preserving the same no-secrets logging rules.
@@ -258,7 +257,7 @@ Intentional differences:
 
 The middleware gRPC contract lives under a major-versioned protobuf package (`openshell.middleware.v1`), the same convention the compute-driver contract uses in [RFC 0001](../0001-core-architecture/README.md). Within a major version, changes stay additive and backward compatible - new fields, RPCs, operation phases, and manifest fields can be added - while breaking wire or semantic changes require a new major version.
 
-`Describe` doubles as the version handshake. A middleware reports its own implementation version, the contract major version it implements, and the `(method, phase)` operations it supports. The supervisor only invokes a middleware whose contract major version it supports. Manifest validation is mandatory: if OpenShell cannot fetch the manifest, the service reports an unsupported contract, or the policy asks for an unsupported operation or config, the gateway config load or policy update fails before traffic can depend on that middleware. Runtime validation failures are handled through `on_error` and use `fail_closed` by default. This keeps first-party and third-party middleware on one uniform contract and gives the protocol a stable path to evolve.
+`Describe` doubles as the version handshake. A middleware reports the middleware API version it implements, its own implementation version, and the service-owned bindings for hook points it supports. The supervisor only invokes a middleware whose API version it supports. Manifest validation is mandatory: if OpenShell cannot fetch the manifest, the service reports an unsupported API version, or the policy asks for an unsupported hook or config, the gateway config load or policy update fails before traffic can depend on that middleware. Runtime validation failures are handled through `on_error` and use `fail_closed` by default. This keeps first-party and third-party middleware on one uniform contract and gives the protocol a stable path to evolve.
 
 ### Registration and delivery
 
