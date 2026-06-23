@@ -44,7 +44,7 @@ v1 defines a single hook, `http.request.pre_credentials`, which runs after netwo
 
 - `connection.before_policy` / `request.before_policy` - *before* network/L7 policy admits the request, for earlier classification. Riskier, because request content reaches a service before policy has allowed the request.
 - `http.request.pre_credentials` (v1) - after policy admits the request, before credential injection.
-- `http.request.post_credentials` - after credential injection, immediately before the relay writes the request upstream. This hook is credential-visible, so it is built-in-only: OpenShell marks it as a restricted hook and rejects any externally registered middleware that advertises it during capability validation. The motivating use is request signing that must run after credentials are injected - for example a built-in `openshell-sigv4` that signs the finalized request just before it is sent upstream.
+- `http.request.post_credentials` - after credential injection, immediately before the relay writes the request upstream. This hook is credential-visible, so it is built-in-only: OpenShell marks it as a restricted hook and rejects any externally registered middleware that advertises it during capability validation. The motivating use is request signing that must run after credentials are injected - for example a built-in `openshell/sigv4` that strips placeholder-signed AWS headers and signs the finalized request with supervisor-resolved credentials just before it is sent upstream.
 - `http.response.completed` - after an upstream request completes, emit metadata such as status, content length, selected route, selected model, and model usage if available. This is notification-only: no body, no transformation, and no allow/deny verdict. It would let reservation-style budget middleware reconcile a pre-dispatch decision without introducing response-body inspection.
 - `response.before_return` - on the return path, after the upstream responds and before the response reaches the sandbox; inspect or redact upstream responses.
 - `message.before_forward` / `message.before_return` - after a WebSocket or streaming protocol upgrade, on each forwarded or returned message, well past the one-shot request path.
@@ -65,7 +65,7 @@ A future version can introduce named capabilities (a portable contract a policy 
 
 ## Header mutation rules
 
-v1 lets a middleware set a constrained set of request headers, subject to an OpenShell allow-list. Future work can formalize exactly which headers a middleware may mutate, and whether credential-bearing headers are ever in scope (today they are not; credential injection runs after the hook).
+v1 lets a middleware append a constrained set of request headers, subject to an OpenShell safe-header allow-list. Credential-bearing headers, OpenShell placeholder headers, `Host`, and AWS SigV4 headers are not in scope for external middleware mutation. Future work can expand this only for restricted built-in hooks whose host capabilities make the credential boundary explicit.
 
 ## Middleware authentication
 
