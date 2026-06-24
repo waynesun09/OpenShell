@@ -280,9 +280,8 @@ message InterceptorBinding {
   repeated GatewayInterceptorPhase phases = 2;
   repeated string rpcs = 3;
   int32 order = 4;
-  bool modifies = 5;
-  string on_error = 6;
-  InterceptorSelector selector = 7;
+  string on_error = 5;
+  InterceptorSelector selector = 6;
 }
 
 message InterceptorSelector {
@@ -299,6 +298,9 @@ allows expansion.
 
 Empty selector fields match all values. A gateway override can narrow a
 service-declared selector, such as limiting a binding to a specific RPC.
+Patch capability is derived from the selected phase, not from a separate binding
+flag. A binding in `pre_request` or `modify_operation` may return zero or more
+patches. A binding in `validate` or `post_commit` must not return patches.
 
 Gateway config example for a remote policy provider:
 
@@ -326,8 +328,9 @@ bindings run by this deterministic ordering:
 3. gateway interceptor service name.
 4. binding ID.
 
-The gateway rejects gateway interceptor configuration that creates ambiguous
-modification order for the same field if that can be detected statically.
+Patches are applied in binding execution order. Invalid patches, conflicting
+patches, or patches returned from a non-modification phase are invalid gateway
+interceptor results.
 
 ### Failure policy
 
@@ -350,7 +353,8 @@ service-level gateway config, then applies any binding override.
 
 Defaults:
 
-- Modifying and validating bindings default to `fail_closed`.
+- `pre_request`, `modify_operation`, and `validate` bindings default to
+  `fail_closed`.
 - `post_commit` bindings default to `ignore`.
 
 The gateway enforces a timeout and response size limit for every gateway
@@ -398,14 +402,12 @@ InterceptorManifest {
       id: "sandbox-policy-default"
       phases: [GATEWAY_INTERCEPTOR_PHASE_MODIFY_OPERATION]
       rpcs: ["openshell.v1.OpenShell/CreateSandbox"]
-      modifies: true
       on_error: "fail_closed"
     },
     {
       id: "policy-authority"
       phases: [GATEWAY_INTERCEPTOR_PHASE_VALIDATE]
       rpcs: ["openshell.v1.OpenShell/UpdateConfig"]
-      modifies: false
       on_error: "fail_closed"
     }
   ]
