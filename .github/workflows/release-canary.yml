@@ -186,6 +186,7 @@ jobs:
           sudo snap connect openshell:log-observe
           sudo snap connect openshell:system-observe
           sudo snap connect openshell:ssh-keys
+          sudo snap restart openshell.gateway
 
       - name: Register snap gateway and check status
         run: |
