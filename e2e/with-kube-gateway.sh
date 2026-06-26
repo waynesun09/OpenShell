@@ -51,9 +51,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=e2e/support/gateway-common.sh
 source "${ROOT}/e2e/support/gateway-common.sh"
 
-# Upstream agent-sandbox release. Bump in lockstep with the supported Sandbox
-# field set in crates/openshell-driver-kubernetes (see sandbox_to_k8s_spec).
-AGENT_SANDBOX_VERSION="${AGENT_SANDBOX_VERSION:-v0.4.6}"
+# Upstream agent-sandbox release. The Kubernetes driver supports the v1beta1
+# Sandbox API introduced in v0.5.0 and falls back to v1alpha1 for v0.4.6
+# clusters. Override this env var to exercise the v1alpha1 controller release.
+AGENT_SANDBOX_VERSION="${AGENT_SANDBOX_VERSION:-v0.5.0}"
 
 e2e_preserve_mise_dirs
 e2e_align_docker_host_with_cli_context
@@ -86,6 +87,28 @@ export XDG_DATA_HOME="${WORKDIR}/data"
 
 kctl() {
   kubectl --context "${KUBE_CONTEXT}" "$@"
+}
+
+wait_for_agent_sandbox_crd() {
+  local deadline
+  local established
+
+  deadline=$(( $(date +%s) + 120 ))
+  while [ "$(date +%s)" -lt "${deadline}" ]; do
+    if kctl get crd/sandboxes.agents.x-k8s.io >/dev/null 2>&1; then
+      established="$(kctl get crd/sandboxes.agents.x-k8s.io \
+        -o 'jsonpath={.status.conditions[?(@.type=="Established")].status}' \
+        2>/dev/null || true)"
+      if [ "${established}" = "True" ]; then
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+
+  echo "Timed out waiting for agent-sandbox Sandbox CRD to become Established" >&2
+  kctl get crd/sandboxes.agents.x-k8s.io -o yaml >&2 || true
+  return 1
 }
 
 helmctl() {
@@ -533,7 +556,7 @@ fi
 echo "Installing agent-sandbox CRDs and controller (${AGENT_SANDBOX_VERSION})..."
 _agent_sandbox_base="https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${AGENT_SANDBOX_VERSION}"
 kctl apply -f "${_agent_sandbox_base}/manifest.yaml"
-kctl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
+wait_for_agent_sandbox_crd
 kctl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller --timeout=300s
 
 helm_extra_args=()
