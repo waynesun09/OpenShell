@@ -2369,6 +2369,7 @@ process:
                             operation_type: String::new(),
                             operation_name: String::new(),
                             fields: Vec::new(),
+                            params: std::collections::HashMap::new(),
                         }),
                     }],
                     allowed_ips: vec!["192.168.0.0/16".to_string()],
