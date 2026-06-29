@@ -3831,6 +3831,7 @@ dependencies = [
  "openshell-core",
  "openshell-ocsf",
  "openshell-policy",
+ "openshell-supervisor-middleware",
  "openshell-supervisor-network",
  "openshell-supervisor-process",
  "rustls",
@@ -3885,6 +3886,7 @@ dependencies = [
  "openshell-providers",
  "openshell-router",
  "openshell-server-macros",
+ "openshell-supervisor-middleware",
  "petname",
  "pin-project-lite",
  "prost",
@@ -3936,6 +3938,7 @@ dependencies = [
  "prost-types",
  "regex",
  "tokio",
+ "tokio-stream",
  "tonic",
 ]
 
