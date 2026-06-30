@@ -65,6 +65,10 @@ pub enum SupervisorTopology {
     /// Run network supervision in a privileged sidecar and process supervision
     /// as a low-capability wrapper in the agent container.
     Sidecar,
+    /// Run network supervision in a sidecar, with pod-network rules installed
+    /// by the `OpenShell` chained CNI plugin instead of a privileged init
+    /// container.
+    CniSidecar,
     /// Run network supervision in a separate supervisor pod and process
     /// supervision as a low-capability wrapper in the agent pod.
     ProxyPod,
@@ -75,6 +79,7 @@ impl std::fmt::Display for SupervisorTopology {
         match self {
             Self::Combined => f.write_str("combined"),
             Self::Sidecar => f.write_str("sidecar"),
+            Self::CniSidecar => f.write_str("cni-sidecar"),
             Self::ProxyPod => f.write_str("proxy-pod"),
         }
     }
@@ -87,9 +92,10 @@ impl FromStr for SupervisorTopology {
         match s {
             "combined" => Ok(Self::Combined),
             "sidecar" => Ok(Self::Sidecar),
+            "cni-sidecar" => Ok(Self::CniSidecar),
             "proxy-pod" => Ok(Self::ProxyPod),
             other => Err(format!(
-                "unknown supervisor topology '{other}'; expected 'combined', 'sidecar', or 'proxy-pod'"
+                "unknown supervisor topology '{other}'; expected 'combined', 'sidecar', 'cni-sidecar', or 'proxy-pod'"
             )),
         }
     }
@@ -221,7 +227,9 @@ pub struct KubernetesComputeConfig {
     pub supervisor_sideload_method: SupervisorSideloadMethod,
     /// Supervisor pod topology. `combined` preserves the existing single
     /// root supervisor container path; `sidecar` moves pod-level network
-    /// enforcement into a dedicated sidecar container.
+    /// enforcement into a dedicated sidecar container; `cni-sidecar` keeps the
+    /// sidecar proxy but expects a chained CNI plugin to install pod-network
+    /// enforcement.
     pub supervisor_topology: SupervisorTopology,
     /// UID used by the long-running network proxy in sidecar and proxy-pod
     /// topologies. In sidecar topology, the network init container installs
@@ -499,6 +507,16 @@ mod tests {
         let cfg: KubernetesComputeConfig = serde_json::from_value(json).unwrap();
         assert_eq!(cfg.supervisor_topology, SupervisorTopology::ProxyPod);
         assert_eq!(cfg.supervisor_topology.to_string(), "proxy-pod");
+    }
+
+    #[test]
+    fn serde_override_supervisor_topology_cni_sidecar() {
+        let json = serde_json::json!({
+            "supervisor_topology": "cni-sidecar"
+        });
+        let cfg: KubernetesComputeConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(cfg.supervisor_topology, SupervisorTopology::CniSidecar);
+        assert_eq!(cfg.supervisor_topology.to_string(), "cni-sidecar");
     }
 
     #[test]

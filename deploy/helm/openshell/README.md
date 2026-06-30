@@ -146,6 +146,19 @@ add `ci/values-spire.yaml` to the OpenShell release values files.
 | certManager.enabled | bool | `false` | Create cert-manager Issuer and Certificate resources. When enabled, cert-manager owns TLS and the chart runs a JWT-only certgen hook to create the sandbox JWT signing Secret that cert-manager does not manage. |
 | certManager.serverDnsNames | list | `["openshell","openshell.openshell.svc","openshell.openshell.svc.cluster.local","localhost","openshell.localhost","*.openshell.localhost","host.docker.internal"]` | DNS SANs on the cert-manager-issued server certificate. |
 | certManager.serverIpAddresses | list | `["127.0.0.1"]` | IP SANs on the cert-manager-issued server certificate. |
+| cni.affinity | object | `{}` |  |
+| cni.binDir | string | `"/opt/cni/bin"` | Host CNI binary directory. |
+| cni.confDir | string | `"/etc/cni/net.d"` | Host CNI config directory. |
+| cni.configFile | string | `""` | Host CNI conflist filename patched by the installer. Empty selects the first non-OpenShell .conflist. |
+| cni.enabled | bool | `false` | Install the OpenShell chained CNI plugin with a privileged node DaemonSet. Required when supervisor.topology is "cni-sidecar". |
+| cni.image.pullPolicy | string | `""` | CNI installer image pull policy. Empty uses supervisor.image.pullPolicy, then image.pullPolicy. |
+| cni.image.repository | string | `""` | CNI installer image repository. Empty uses supervisor.image.repository. |
+| cni.image.tag | string | `""` | CNI installer image tag. Empty uses supervisor.image.tag, then chart appVersion. |
+| cni.logFile | string | `"/var/log/openshell-cni.log"` | Host log file written by the OpenShell CNI plugin and tailed by the installer DaemonSet. |
+| cni.logLevel | string | `"info"` | Log level passed to the OpenShell CNI plugin. |
+| cni.nodeSelector | object | `{}` |  |
+| cni.resources | object | `{}` |  |
+| cni.tolerations | list | `[]` |  |
 | fullnameOverride | string | `""` | Override the full generated resource name. |
 | grpcRoute.enabled | bool | `false` | Create a Gateway API GRPCRoute for the gateway service. |
 | grpcRoute.gateway.className | string | `"eg"` | GatewayClass to reference. Envoy Gateway installs one named "eg". |
